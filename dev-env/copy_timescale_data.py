@@ -19,9 +19,7 @@ DB_HOST = "bs-prod-a404aca-brain-prod.a.timescaledb.io"
 PORT = 24140
 DB = "braindb"
 USER = "eegsense"
-DB_PASSWORD = "AVNS_8wWx1oNQ7FA6FxRnJTI"
 SSH_HOST = "18.200.14.25"
-DB_URI = "postgresql://eegsense:PASSWORD@terraform-20210831132036889100000001.cjv30gja6jtx.eu-west-1.rds.amazonaws.com/eegsense_db"
 
 
 # staging
@@ -29,9 +27,7 @@ DB_HOST_LOCAL = "bs-staging-brain-6b8a.a.timescaledb.io"
 PORT_LOCAL = 24140
 DB_LOCAL = "braindb"
 USER_LOCAL = "eeg_staging"
-DB_PASSWORD_LOCAL = "AVNS_bKaGSpRLKCQ30UvSGQD"
 SSH_HOST_LOCAL="3.248.161.233"
-DB_URI_LOCAL = "postgresql://eeg_staging:AVNS_bKaGSpRLKCQ30UvSGQD@{db_host}:{db_port}/braindb"
 
 def create_engine_local():
     tunnel= SSHTunnelForwarder(

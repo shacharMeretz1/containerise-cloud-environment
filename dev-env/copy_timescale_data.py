@@ -1,54 +1,75 @@
+
+
+from handle_timescale import TimescaleConnector
 from sqlalchemy.inspection import inspect
 import logging
 import os
+from sshtunnel import SSHTunnelForwarder
 
 from sqlalchemy import create_engine
 import sqlalchemy.orm as orm
 from sqlalchemy.orm import Session
+import psycopg2
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-from common_models import EEGSample, EEGSubject, SubjectPII
 
-def metadata_copy(measurements_id):
+DB_HOST = "bs-prod-a404aca-brain-prod.a.timescaledb.io"
+PORT = 24140
+DB = "braindb"
+USER = "eegsense"
+DB_PASSWORD = "AVNS_8wWx1oNQ7FA6FxRnJTI"
+SSH_HOST = "18.200.14.25"
+DB_URI = "postgresql://eegsense:PASSWORD@terraform-20210831132036889100000001.cjv30gja6jtx.eu-west-1.rds.amazonaws.com/eegsense_db"
 
-    ###Way to get all the relationships that exist for one type of object) - need it for later
-    '''eeg_subject_relations = inspect(EEGSample).relationships.items()
-    for relation in eeg_subject_relations:
-        print (relation)'''
 
+# staging
+DB_HOST_LOCAL = "bs-staging-brain-6b8a.a.timescaledb.io"
+PORT_LOCAL = 24140
+DB_LOCAL = "braindb"
+USER_LOCAL = "eeg_staging"
+DB_PASSWORD_LOCAL = "AVNS_bKaGSpRLKCQ30UvSGQD"
+SSH_HOST_LOCAL="3.248.161.233"
+DB_URI_LOCAL = "postgresql://eeg_staging:AVNS_bKaGSpRLKCQ30UvSGQD@{db_host}:{db_port}/braindb"
+
+def create_engine_local():
+    tunnel= SSHTunnelForwarder(
+                (SSH_HOST_LOCAL, 22), ssh_username="ubuntu", remote_bind_address=(DB_HOST_LOCAL, PORT_LOCAL))
+    tunnel.start()
+    db_port = tunnel.local_bind_port
+    db_host = tunnel.local_bind_host
+    engine = create_engine(DB_URI_LOCAL.format(db_port=db_port, db_host=db_host))
+    return engine
+
+def insert_df_by_chunks(df,chunk_row_size,engine,table_name,schema_name):
+    list_df = [df[i:i+chunk_row_size] for i in range(0,df.shape[0],chunk_row_size)]
+    for val in list_df:
+        val.to_sql(table_name, engine, schema=schema_name, if_exists="append", index=False)
+
+def timescale_copy(measurements_id):
     try:
-        from_db_uri = os.environ.get("DB_URI")
-        from_engine = create_engine(from_db_uri)
-        with orm.Session(from_engine) as from_session:
-    
-            object_arr=[]
-            result = from_session.query(SubjectPII,EEGSubject,EEGSample
-                ).join(EEGSubject,EEGSubject.pii_id == SubjectPII.id
-                ).join(EEGSample,  EEGSample.subject_id == EEGSubject.id
-                ).filter(EEGSample.measurement_id.in_(measurements_id)
-                ).all()
+        for measurement_id in measurements_id:
 
-            for row in result:
-                for db_object in row:
-                    if db_object not in object_arr:
-                        object_arr.append(db_object)
-                        from_session.expunge(db_object)
-
-        to_db_uri = os.environ.get("DB_URI2")
-        to_engine = create_engine(to_db_uri)
-        with orm.Session(to_engine) as to_session:
-            for obj in object_arr:
-                to_session.merge(obj)
-            to_session.add_all(object_arr)
-            to_session.commit()
-
+            from_tscale = TimescaleConnector(db_host=DB_HOST, db_port=PORT, db_name=DB,
+                                             db_user=USER, db_password=DB_PASSWORD, ssh_host=SSH_HOST, ssh_port=22)
+            from_tscale.connect()
+            sample_id=from_tscale.execute(f"select id from eeg_sample where measurement_id = '{measurement_id}'")[0]
             
+            eeg_data_df = from_tscale.get_data_for_sample_id(sample_id,"eeg_data", limit=10)
+            aux_data_df = from_tscale.get_data_for_sample_id(sample_id,"aux_data", limit=1)
+
+            engine=create_engine_local()
+            
+            chunk_size=2
+            insert_df_by_chunks(eeg_data_df,chunk_size,engine,"eeg_data","public")
+            insert_df_by_chunks(aux_data_df,chunk_size,engine,"aux_data","public")
+
+
     except Exception as e:
         logger.error(e)
 
 
 if __name__ == '__main__':
-    measurement_ids=["9b19d4cd-f84a-47d9-81ed-487e3ae2436b"]
-    response = metadata_copy(measurement_ids)
+    measurements_id = ["8vhwNyFM"]
+    response = timescale_copy(measurements_id)

@@ -10,10 +10,8 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 forgein_keys_arr={}
-already_check=[]
 
 def recursive_func(session,inspector,table_name,ids_arr=None):
-    print(table_name)
     forgein_keys=inspector.get_foreign_keys(table_name=table_name)
     
     if len(forgein_keys)==0:
@@ -58,8 +56,6 @@ def call_recursive(db_uri, measurements_id):
 
 
 def metadata_copy(measurements_id):
-
-    
 
     try:
         call_recursive(PROD_DB_URI, measurements_id)

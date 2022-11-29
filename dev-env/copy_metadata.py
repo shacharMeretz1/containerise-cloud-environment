@@ -59,27 +59,7 @@ def call_recursive(db_uri, measurements_id):
 
 def metadata_copy(measurements_id):
 
-    PROD_DB_URI="postgresql://eegsense:AVNS_8wWx1oNQ7FA6FxRnJTI@bs-prod-a404aca-brain-prod.a.timescaledb.io:24141/default_pool"
-    PROD_DB_HOST="bs-prod-a404aca-brain-prod.a.timescaledb.io"
-    PROD_PORT=24140
-    PROD_USER="eegsense"
-    PROD_DB="braindb"
-    PROD_DB_PASSWORD="AVNS_8wWx1oNQ7FA6FxRnJTI"
-    PROD_TUNNEL_HOST="18.200.14.25"
-
-    STAGING_DB_URI="postgresql://shachar:shachar@localhost:5432/postgres"
-    STAGING_DB_HOST="bs-staging-brain-6b8a.a.timescaledb.io"
-    STAGING_PORT=24140
-    STAGING_USER="eeg_staging"
-    STAGING_DB="braindb"
-    STAGING_DB_PASSWORD="AVNS_bKaGSpRLKCQ30UvSGQD"
-    STAGING_TUNNEL_HOST="3.248.161.233"
-
-    DB_HOST_LOCAL = "localhost"
-    PORT_LOCAL = 5432
-    DB_LOCAL = "postgres"
-    USER_LOCAL = "shachar"
-    DB_PASSWORD_LOCAL="shachar"
+    
 
     try:
         call_recursive(PROD_DB_URI, measurements_id)

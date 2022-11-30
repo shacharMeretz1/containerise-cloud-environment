@@ -5,6 +5,9 @@ ENV PATH="/opt/venv/bin:$PATH"
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+FROM postgres AS ppostgres-image
+ENV POSTGRES_PASSWORD docker
+ENV POSTGRES_DB test
 
 FROM python:3 AS run-image
 WORKDIR /usr/src/app
@@ -17,7 +20,8 @@ COPY id_rsa.pub /root/.ssh
 RUN chmod 600 ~/.ssh/id_rsa
 COPY brie_script.sh .
 RUN chmod +x deploy_script.sh
-ARG ENV_NAME
-COPY ${ENV_NAME}.env .
+COPY $params.env .
 
 
+##download the postgres image
+##define docker compose to postgres

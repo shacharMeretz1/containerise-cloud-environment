@@ -1,13 +1,31 @@
 import logging
-import os
 from sqlalchemy.inspection import inspect
-from sqlalchemy import create_engine
 import sqlalchemy.orm as orm
-from sqlalchemy.orm import Session
-import psycopg2 as pg2
-from handle_metadata import DBConnector
+from handle_metadata import DBConnector,create_engine_local
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
+
+PROD_DB_URI="postgresql://eegsense:AVNS_8wWx1oNQ7FA6FxRnJTI@{db_host}:{db_port}/braindb"
+PROD_DB_HOST="bs-prod-a404aca-brain-prod.a.timescaledb.io"
+PROD_PORT=24140
+PROD_USER="eegsense"
+PROD_DB="braindb"
+PROD_DB_PASSWORD="AVNS_8wWx1oNQ7FA6FxRnJTI"
+PROD_TUNNEL_HOST="18.200.14.25"
+
+STAGING_DB_URI="postgresql://shachar:shachar@localhost:5432/postgres"
+STAGING_DB_HOST="bs-staging-brain-6b8a.a.timescaledb.io"
+STAGING_PORT=24140
+STAGING_USER="eeg_staging"
+STAGING_DB="braindb"
+STAGING_DB_PASSWORD="AVNS_bKaGSpRLKCQ30UvSGQD"
+STAGING_TUNNEL_HOST="3.248.161.233"
+
+DB_HOST_LOCAL = "localhost"
+PORT_LOCAL = 5432
+DB_LOCAL = "postgres"
+USER_LOCAL = "shachar"
+DB_PASSWORD_LOCAL="shachar"
 
 forgein_keys_arr={}
 
@@ -23,7 +41,6 @@ def recursive_func(session,inspector,table_name,ids_arr=None):
         if forgein_keys_arr.get(forgein_table_name) is None:
                 forgein_keys_arr[forgein_table_name]=[]
         local_column=forgein_key["constrained_columns"][0]
-        forgein_Table_column=forgein_key["referred_columns"][0]
         for obj_id in ids_arr: ##all the object in this class
             forgein_key_ids = session.execute(f"SELECT {local_column} FROM {table_name} WHERE id = {obj_id}").all()[0]
             if forgein_key_ids[0] is None:
@@ -41,8 +58,7 @@ def recursive_func(session,inspector,table_name,ids_arr=None):
                 recursive_func(session,inspector,forgein_table_name, all_forgein_keys)
         
 
-def call_recursive(db_uri, measurements_id):
-    from_engine = create_engine(db_uri)
+def call_recursive(from_engine, measurements_id):
     inspector = inspect(from_engine) 
     with orm.Session(from_engine) as from_session:
         eeg_samples = from_session.execute(f"SELECT id FROM eeg_sample where measurement_id = '{measurements_id[0]}'").all()
@@ -56,43 +72,23 @@ def call_recursive(db_uri, measurements_id):
 
 
 def metadata_copy(measurements_id):
-    PROD_DB_URI="postgresql://eegsense:AVNS_8wWx1oNQ7FA6FxRnJTI@bs-prod-a404aca-brain-prod.a.timescaledb.io:24141/default_pool"
-    PROD_DB_HOST="bs-prod-a404aca-brain-prod.a.timescaledb.io"
-    PROD_PORT=24140
-    PROD_USER="eegsense"
-    PROD_DB="braindb"
-    PROD_DB_PASSWORD="AVNS_8wWx1oNQ7FA6FxRnJTI"
-    PROD_TUNNEL_HOST="18.200.14.25"
-
-    STAGING_DB_URI="postgresql://shachar:shachar@localhost:5432/postgres"
-    STAGING_DB_HOST="bs-staging-brain-6b8a.a.timescaledb.io"
-    STAGING_PORT=24140
-    STAGING_USER="eeg_staging"
-    STAGING_DB="braindb"
-    STAGING_DB_PASSWORD="AVNS_bKaGSpRLKCQ30UvSGQD"
-    STAGING_TUNNEL_HOST="3.248.161.233"
-
-    DB_HOST_LOCAL = "localhost"
-    PORT_LOCAL = 5432
-    DB_LOCAL = "postgres"
-    USER_LOCAL = "shachar"
-    DB_PASSWORD_LOCAL="shachar"
+    
 
     try:
-        call_recursive(PROD_DB_URI, measurements_id)
+        from_engine = create_engine_local(PROD_TUNNEL_HOST,PROD_DB_HOST,PROD_PORT,PROD_DB_URI)
+
+        call_recursive(from_engine,measurements_id)
         
         OBJECTS=[]
 
-        conn_prod = DBConnector(
-                ssh_host=PROD_TUNNEL_HOST, db_name=PROD_DB, db_user=PROD_USER, db_password=PROD_DB_PASSWORD, db_host=PROD_DB_HOST, db_port=PROD_PORT)
-        conn_prod.connect()
-        cur_prod=conn_prod.connection.cursor()
+        from_conn = from_engine.raw_connection()
+        from_cur = from_conn.cursor()
 
         for val in forgein_keys_arr:
             if not len(forgein_keys_arr[val])==0:
-                cur_prod.execute(f"SELECT * FROM {val} where id = ANY(ARRAY{forgein_keys_arr[val]})")
-                conn_prod.connection.commit()
-                full_objects=cur_prod.fetchall()
+                from_cur.execute(f"SELECT * FROM {val} where id = ANY(ARRAY{forgein_keys_arr[val]})")
+                from_conn.connection.commit()
+                full_objects=from_cur.fetchall()
                 for object in full_objects:
                     OBJECTS.append((val,object))
 
@@ -101,10 +97,9 @@ def metadata_copy(measurements_id):
         conn.connect()
         cur=conn.connection.cursor()
         for table_name, object in OBJECTS:
-                text=f"INSERT INTO {val}"
                 cur.execute(f"INSERT INTO {table_name} VALUES %s " , (object,))
                 conn.connection.commit()
-                result=cur.fetchall()
+                cur.fetchall()
 
     except Exception as e:
         logger.error(e)

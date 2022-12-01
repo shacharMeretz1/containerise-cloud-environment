@@ -33,21 +33,6 @@ DB_LOCAL = "postgres"
 USER_LOCAL = "shachar"
 DB_PASSWORD_LOCAL="shachar"
 
-
-'''DB_HOST = "bs-prod-a404aca-brain-prod.a.timescaledb.io"
-PORT = 24140
-DB = "braindb"
-USER = "eegsense"
-SSH_HOST = "18.200.14.25"
-
-
-# staging
-DB_HOST_LOCAL = "bs-staging-brain-6b8a.a.timescaledb.io"
-PORT_LOCAL = 24140
-DB_LOCAL = "braindb"
-USER_LOCAL = "eeg_staging"
-SSH_HOST_LOCAL="3.248.161.233"'''
-
 def create_engine_local(ssh_host,host,port,db_uri):
     tunnel= SSHTunnelForwarder(
                 (ssh_host, 22), ssh_username="ubuntu", remote_bind_address=(host, port))
@@ -71,14 +56,14 @@ def timescale_copy():
         to_engine=create_engine_local(STAGING_TUNNEL_HOST,STAGING_DB_HOST,STAGING_PORT,STAGING_DB_URI)
         with orm.Session(to_engine) as to_session:
             samples_id = to_session.execute(f"SELECT id FROM eeg_sample").all()
-        #samples_id=from_tscale.execute()
   
         for sample_id in samples_id:
-            eeg_data_df = from_tscale.get_data_for_sample_id(sample_id,"eeg_data", limit=10)
-            aux_data_df = from_tscale.get_data_for_sample_id(sample_id,"aux_data", limit=1)
+            sample_id=sample_id[0]
+            eeg_data_df = from_tscale.get_data_for_sample_id(sample_id,"eeg_data")
+            aux_data_df = from_tscale.get_data_for_sample_id(sample_id,"aux_data")
 
             
-            chunk_size=2
+            chunk_size=50000
             insert_df_by_chunks(eeg_data_df,chunk_size,to_engine,"eeg_data","public")
             insert_df_by_chunks(aux_data_df,chunk_size,to_engine,"aux_data","public")
 

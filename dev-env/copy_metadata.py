@@ -82,6 +82,7 @@ def change_json_attribute(index,full_objects):
         dict_obj=json.dumps(dict_obj)
         list_obj[index]=dict_obj
         full_objects[list_index]=tuple(list_obj)
+    return full_objects
 
 
 def metadata_copy():
@@ -95,6 +96,7 @@ def metadata_copy():
         call_recursive(from_engine)
         
         OBJECTS=[]
+        full_objects=None
 
         from_conn = from_engine.raw_connection()
         from_cur = from_conn.cursor()

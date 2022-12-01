@@ -7,27 +7,7 @@ import json
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-PROD_DB_URI="postgresql://eegsense:AVNS_8wWx1oNQ7FA6FxRnJTI@{db_host}:{db_port}/braindb"
-PROD_DB_HOST="bs-prod-a404aca-brain-prod.a.timescaledb.io"
-PROD_PORT=24140
-PROD_USER="eegsense"
-PROD_DB="braindb"
-PROD_DB_PASSWORD="AVNS_8wWx1oNQ7FA6FxRnJTI"
-PROD_TUNNEL_HOST="18.200.14.25"
 
-STAGING_DB_URI="postgresql://shachar:shachar@localhost:5432/postgres"
-STAGING_DB_HOST="bs-staging-brain-6b8a.a.timescaledb.io"
-STAGING_PORT=24140
-STAGING_USER="eeg_staging"
-STAGING_DB="braindb"
-STAGING_DB_PASSWORD="AVNS_bKaGSpRLKCQ30UvSGQD"
-STAGING_TUNNEL_HOST="3.248.161.233"
-
-DB_HOST_LOCAL = "localhost"
-PORT_LOCAL = 5432
-DB_LOCAL = "postgres"
-USER_LOCAL = "shachar"
-DB_PASSWORD_LOCAL="shachar"
 
 forgein_keys_arr={}
 
@@ -75,6 +55,15 @@ def call_recursive(from_engine):
             eeg_samples_ids.append(eeg_sample[0])
         recursive_func(from_session,inspector, "eeg_sample", eeg_samples_ids)
 
+def change_json_attribute(index,full_objects):
+    for list_index,obj in enumerate(full_objects):
+        list_obj=list(obj)
+        dict_obj=list_obj[index]
+        dict_obj=json.dumps(dict_obj)
+        list_obj[index]=dict_obj
+        full_objects[list_index]=tuple(list_obj)
+
+
 def metadata_copy():
     
     tables=["sensi_event_type",#"analysis_type","analysis_version",
@@ -99,23 +88,17 @@ def metadata_copy():
                 from_conn.connection.commit()
                 full_objects=from_cur.fetchall()
                 index=0
-                for column_name,column_type in columns_type:
+                for _,column_type in columns_type:
                     if column_type=="jsonb" or column_type=="json":
-                        for index2,obj in enumerate(full_objects):
-                            list_obj=list(obj)
-                            dict_obj=list_obj[index]
-                            dict_obj=json.dumps(dict_obj, indent = 4)
-                            list_obj[index]=dict_obj
-                            full_objects[index2]=tuple(list_obj)
+                        full_objects=change_json_attribute(index,full_objects)
                     index+=1
                 for obj in full_objects:
                     OBJECTS.append((val,obj))
         
-        OBJECTS= OBJECTS[::-1]
+        OBJECTS= OBJECTS[::-1] ##The purpose of this line is to replace the array (we want to add the object in the right order base on the relationship objects)
 
         for table in tables:
             query=f"SELECT * FROM {table}"
-            print(query)
             from_cur.execute(query)
             from_conn.connection.commit()
             full_objects=from_cur.fetchall()
@@ -129,12 +112,10 @@ def metadata_copy():
         for table_name, obj in OBJECTS:
             cur.execute(f"INSERT INTO {table_name} VALUES %s " , (obj,))
         conn.connection.commit()
-                #cur.fetchall()
 
     except Exception as e:
         logger.error(e)
 
 
 if __name__ == '__main__':
-    #measurement_ids=["KPZuZmzN"]
     response = metadata_copy()
